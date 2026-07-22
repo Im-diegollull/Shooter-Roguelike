@@ -25,3 +25,7 @@ mono_crash.*.json
 # API key / config sensible (nunca subir la key)
 config.cfg
 *.env
+
+# Doc de diseño interno (no publicar en GitHub)
+Claude.md
+CLAUDE.md
