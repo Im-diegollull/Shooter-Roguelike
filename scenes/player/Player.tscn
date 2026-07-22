@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3 uid="uid://bshplayer0001"]
+
+[ext_resource type="Script" path="res://scenes/player/Player.gd" id="1_player"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 14.0
+
+[node name="Player" type="CharacterBody2D"]
+script = ExtResource("1_player")
+
+[node name="Body" type="Polygon2D" parent="."]
+color = Color(0.36, 0.72, 0.9, 1)
+polygon = PackedVector2Array(18, 0, -12, -13, -12, 13)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_body")
