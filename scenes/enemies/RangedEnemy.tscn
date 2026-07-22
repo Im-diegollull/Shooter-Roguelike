@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3 uid="uid://bshenemyranged01"]
+
+[ext_resource type="Script" path="res://scenes/enemies/RangedEnemy.gd" id="1_ranged"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_ranged"]
+radius = 14.0
+
+[node name="RangedEnemy" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("1_ranged")
+move_speed = 90.0
+max_health = 2
+contact_damage = 1
+
+[node name="Body" type="Polygon2D" parent="."]
+color = Color(0.62, 0.42, 0.95, 1)
+polygon = PackedVector2Array(0, -16, 16, 0, 0, 16, -16, 0)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_ranged")
