@@ -15,6 +15,11 @@ run/main_scene="res://scenes/ui/MainMenu.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 
+[autoload]
+
+ClaudeClient="*res://scripts/ai/ClaudeClient.gd"
+RunMemory="*res://scripts/managers/RunMemory.gd"
+
 [display]
 
 window/size/viewport_width=1280

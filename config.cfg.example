@@ -1,0 +1,4 @@
+; Copia este archivo como "config.cfg" (está en .gitignore) y pega tu API key.
+; Alternativa: define la variable de entorno ANTHROPIC_API_KEY.
+[api]
+key=""
