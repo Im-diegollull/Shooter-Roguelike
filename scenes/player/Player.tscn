@@ -9,6 +9,7 @@ radius = 14.0
 radius = 22.0
 
 [node name="Player" type="CharacterBody2D" groups=["player"]]
+collision_mask = 16
 script = ExtResource("1_player")
 
 [node name="Body" type="Polygon2D" parent="."]
@@ -27,3 +28,8 @@ collision_mask = 2
 
 [node name="HurtboxShape" type="CollisionShape2D" parent="Hurtbox"]
 shape = SubResource("CircleShape2D_hurt")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+ignore_rotation = true
+position_smoothing_enabled = true
+position_smoothing_speed = 6.0

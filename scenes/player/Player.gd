@@ -14,10 +14,13 @@ signal died
 @export var max_health: int = 5
 ## Segundos de invulnerabilidad tras recibir un golpe.
 @export var invuln_time: float = 0.8
+## Cuántos píxeles se adelanta la cámara hacia el ratón (feel twin-stick).
+@export var look_ahead_distance: float = 110.0
 
 @onready var muzzle: Marker2D = $Muzzle
 @onready var hurtbox: Area2D = $Hurtbox
 @onready var body_visual: Polygon2D = $Body
+@onready var camera: Camera2D = $Camera2D
 
 var current_health: int
 var _fire_cooldown: float = 0.0
@@ -44,6 +47,14 @@ func _physics_process(delta: float) -> void:
 func _process(_delta: float) -> void:
 	# El cuerpo apunta hacia el ratón (estilo twin-stick).
 	look_at(get_global_mouse_position())
+	_update_camera()
+
+func _update_camera() -> void:
+	# La cámara se adelanta un poco hacia el ratón; el suavizado del Camera2D
+	# hace el resto. Se fija la posición global para que la rotación del cuerpo
+	# (look_at) no arrastre la cámara.
+	var to_mouse: Vector2 = get_global_mouse_position() - global_position
+	camera.global_position = global_position + to_mouse.limit_length(look_ahead_distance)
 
 func _update_invuln(delta: float) -> void:
 	if _invuln > 0.0:
