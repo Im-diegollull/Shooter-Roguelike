@@ -7,6 +7,7 @@ extends Node2D
 
 const CHASER_SCENE: PackedScene = preload("res://scenes/enemies/Enemy.tscn")
 const RANGED_SCENE: PackedScene = preload("res://scenes/enemies/RangedEnemy.tscn")
+const NPC_SCENE: PackedScene = preload("res://scenes/npcs/NPC.tscn")
 
 ## Layer 5 (valor 16) reservada para el entorno/muros.
 const WALLS_LAYER: int = 16
@@ -53,6 +54,7 @@ func _ready() -> void:
 	_build_walls()
 	_draw_ready()
 	_place_player()
+	_spawn_npcs()
 	_spawn_enemies()
 
 # --- Generación ---
@@ -203,6 +205,17 @@ func _place_player() -> void:
 	if player == null or rooms.is_empty():
 		return
 	player.global_position = _tile_center(rooms[0].position + rooms[0].size / 2)
+
+func _spawn_npcs() -> void:
+	# Fase 8: un Mercader de prueba en la sala de inicio, junto al jugador.
+	if rooms.is_empty():
+		return
+	var room := rooms[0]
+	var npc := NPC_SCENE.instantiate()
+	# Esquina de la sala (siempre suelo), separado del centro donde nace el jugador.
+	var tile := room.position + Vector2i(2, 2)
+	npc.global_position = _tile_center(tile)
+	add_child(npc)
 
 func _spawn_enemies() -> void:
 	_enemies_root = Node2D.new()
