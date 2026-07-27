@@ -19,6 +19,9 @@ signal request_failed(reason: String)
 var _api_key: String = ""
 
 func _ready() -> void:
+	# El diálogo pausa el árbol; este autoload (y sus HTTPRequest) deben seguir
+	# procesando para que la petición se complete durante la conversación.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_api_key = _load_api_key()
 	if _api_key.is_empty():
 		push_warning("ClaudeClient: sin API key. Crea res://config.cfg con [api] key=\"...\".")
