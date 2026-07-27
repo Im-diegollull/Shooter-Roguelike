@@ -9,6 +9,12 @@ var floors_cleared: int = 0
 var npcs_helped: Array[String] = []
 var npcs_killed: Array[String] = []
 
+## --- Misión emergente activa (una a la vez, por simplicidad) ---
+var mission_giver: String = ""
+var mission_desc: String = ""
+## Valor de player_kills que hay que alcanzar para completar el encargo.
+var mission_kill_target: int = 0
+
 ## Reinicia la memoria al empezar una run nueva.
 func reset() -> void:
 	events.clear()
@@ -16,6 +22,7 @@ func reset() -> void:
 	floors_cleared = 0
 	npcs_helped.clear()
 	npcs_killed.clear()
+	clear_mission()
 
 func add_event(description: String) -> void:
 	events.append(description)
@@ -33,6 +40,34 @@ func kill_npc(npc_name: String) -> void:
 		npcs_killed.append(npc_name)
 		add_event("Mataste a %s" % npc_name)
 
+# --- Misiones emergentes ---
+
+func has_mission() -> bool:
+	return not mission_giver.is_empty()
+
+## `kills_needed` es relativo al momento del encargo.
+func set_mission(giver: String, kills_needed: int, desc: String) -> void:
+	mission_giver = giver
+	mission_kill_target = player_kills + kills_needed
+	mission_desc = desc
+	add_event("%s te encargó: %s" % [giver, desc])
+
+func mission_completed() -> bool:
+	return has_mission() and player_kills >= mission_kill_target
+
+func clear_mission() -> void:
+	mission_giver = ""
+	mission_desc = ""
+	mission_kill_target = 0
+
+func _mission_line() -> String:
+	if not has_mission():
+		return "- Encargo activo: ninguno"
+	if mission_completed():
+		return "- Encargo de %s: COMPLETADO (%s). ¡El jugador ya lo cumplió!" % [mission_giver, mission_desc]
+	var faltan: int = maxi(mission_kill_target - player_kills, 0)
+	return "- Encargo de %s: PENDIENTE (%s). Faltan %d enemigos." % [mission_giver, mission_desc, faltan]
+
 ## Resumen en texto plano que se inyecta en el system prompt de los NPCs.
 func get_context_summary() -> String:
 	return "\n".join([
@@ -41,6 +76,7 @@ func get_context_summary() -> String:
 		"- Enemigos eliminados: %d" % player_kills,
 		"- NPCs ayudados: %s" % _join_or_none(npcs_helped),
 		"- NPCs eliminados: %s" % _join_or_none(npcs_killed),
+		_mission_line(),
 		"- Eventos recientes: %s" % _join_or_none(events.slice(-5)),
 	])
 
