@@ -207,15 +207,36 @@ func _place_player() -> void:
 	player.global_position = _tile_center(rooms[0].position + rooms[0].size / 2)
 
 func _spawn_npcs() -> void:
-	# Fase 8: un Mercader de prueba en la sala de inicio, junto al jugador.
 	if rooms.is_empty():
 		return
-	var room := rooms[0]
-	var npc := NPC_SCENE.instantiate()
-	# Esquina de la sala (siempre suelo), separado del centro donde nace el jugador.
-	var tile := room.position + Vector2i(2, 2)
-	npc.global_position = _tile_center(tile)
-	add_child(npc)
+	# Dos arquetipos distintos: así se puede matar a uno y ver reaccionar al otro.
+	var archetypes := [
+		{
+			"name": "Vendrik el Mercader",
+			"personality": "Codicioso pero afable si hueles a oro. Hablas con sorna.",
+			"situation": "Tienes un puesto improvisado entre las sombras del piso.",
+			"greeting": "Ah, un cliente. ¿Vienes a gastar o solo a mirar?",
+		},
+		{
+			"name": "Sarn el Desertor",
+			"personality": "Paranoico y desconfiado. Desertaste de la guardia del dungeon.",
+			"situation": "Te escondes en un rincón, temiendo que te encuentren.",
+			"greeting": "No te acerques tanto… ¿quién te envía?",
+			"can_defect": true,
+		},
+	]
+	# Sala 0 junto al jugador; el resto en salas separadas.
+	for i in mini(archetypes.size(), rooms.size()):
+		var room := rooms[i]
+		var data: Dictionary = archetypes[i]
+		var npc := NPC_SCENE.instantiate()
+		npc.npc_name = data["name"]
+		npc.personality = data["personality"]
+		npc.situation = data["situation"]
+		npc.greeting = data["greeting"]
+		npc.can_defect = data.get("can_defect", false)
+		npc.global_position = _tile_center(room.position + Vector2i(2, 2))
+		add_child(npc)
 
 func _spawn_enemies() -> void:
 	_enemies_root = Node2D.new()
