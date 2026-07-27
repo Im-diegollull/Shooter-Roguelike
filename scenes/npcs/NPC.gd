@@ -19,6 +19,8 @@ const DIALOG_BOX_SCENE: PackedScene = preload("res://scenes/ui/DialogBox.tscn")
 
 var _player_in_range: bool = false
 var _dialog: DialogBox = null
+## Historial de la conversación actual (turnos user/assistant) para dar continuidad.
+var _history: Array = []
 
 func _ready() -> void:
 	add_to_group("npc")
@@ -46,6 +48,7 @@ func _on_body_exited(body: Node) -> void:
 # --- Diálogo ---
 
 func _open_dialog() -> void:
+	_history.clear()
 	_dialog = DIALOG_BOX_SCENE.instantiate()
 	get_tree().current_scene.add_child(_dialog)
 	_dialog.closed.connect(_on_dialog_closed)
@@ -67,12 +70,42 @@ func _on_player_sent(message: String) -> void:
 	if _dialog != null:
 		_dialog.add_npc_line(response)
 
-## Fase 8: placeholder. Fase 9 reemplaza el cuerpo por:
-##   ClaudeClient.ask(build_system_prompt(), message)  + await de la señal.
-func _generate_response(_message: String) -> String:
-	# Timer con process_always para que corra aunque el árbol esté en pausa.
-	await get_tree().create_timer(0.6).timeout
-	return "(%s te observa en silencio. Sus palabras reales llegarán con la IA en la Fase 9.)" % npc_name
+## Envía el mensaje a Claude con el historial de la conversación y espera la
+## respuesta. Devuelve un texto de fallback legible si la API falla.
+func _generate_response(message: String) -> String:
+	_history.append({"role": "user", "content": message})
+	ClaudeClient.send(build_system_prompt(), _history)
+
+	var result: Array = await _next_claude_result()
+	var ok: bool = result[0]
+	var text: String = result[1]
+
+	if ok:
+		_history.append({"role": "assistant", "content": text})
+		return text
+	# En error no se guarda nada en el historial; se avisa en personaje.
+	return "(%s enmudece un momento… algo falló: %s)" % [npc_name, text]
+
+## Espera la primera de las dos señales de ClaudeClient. Devuelve [ok: bool, texto].
+func _next_claude_result() -> Array:
+	var state := {"value": []}
+	var on_ok := func(t: String) -> void:
+		if state.value.is_empty():
+			state.value = [true, t]
+	var on_err := func(reason: String) -> void:
+		if state.value.is_empty():
+			state.value = [false, reason]
+	ClaudeClient.response_received.connect(on_ok, CONNECT_ONE_SHOT)
+	ClaudeClient.request_failed.connect(on_err, CONNECT_ONE_SHOT)
+	# process_frame se emite aunque el árbol esté en pausa.
+	while state.value.is_empty():
+		await get_tree().process_frame
+	# Limpia la señal que no se disparó (la que sí, ya se desconectó por ONE_SHOT).
+	if ClaudeClient.response_received.is_connected(on_ok):
+		ClaudeClient.response_received.disconnect(on_ok)
+	if ClaudeClient.request_failed.is_connected(on_err):
+		ClaudeClient.request_failed.disconnect(on_err)
+	return state.value
 
 ## Prompt de sistema listo para la Fase 9 (ya inyecta el contexto de RunMemory).
 func build_system_prompt() -> String:
