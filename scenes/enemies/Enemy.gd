@@ -27,6 +27,7 @@ func take_damage(amount: int) -> void:
 		die()
 
 func die() -> void:
+	RunMemory.register_kill()
 	queue_free()
 
 # --- Utilidades para subclases ---
