@@ -185,29 +185,46 @@ func _next_claude_result() -> Array:
 		ClaudeClient.request_failed.disconnect(on_err)
 	return state.value
 
-## Prompt de sistema (inyecta el contexto de RunMemory y las reglas de etiquetas).
+## Marco del mundo compartido por TODOS los NPCs (biblia "EL CORO", ver lore.md).
+## Da el escenario por sentado; los NPCs no lo explican, lo habitan.
+const WORLD_FRAME: Array[String] = [
+	"MUNDO — EL CORO:",
+	"Estás en el Pozo: una mina-arcología vertical que la corporación Caldera abandonó",
+	"hace doce años sin apagar nada. Las máquinas siguen girando, hace calor, y abajo",
+	"quedó la gente que le debía plata. Caldera no cobraba deudas en dinero: las cobraba",
+	"en voces. Al deudor le extraían la voz y la memoria para operar los sistemas del",
+	"complejo (ascensores, puertas, alarmas). Nueve de esas personas forman CORO, el",
+	"sistema de guía que todavía le habla a quien baja. Nadie baja por gusto: se baja por",
+	"una deuda. La gente que queda aquí está cansada, no es heroica.",
+]
+
+## Prompt de sistema (inyecta el mundo, el contexto de RunMemory y las etiquetas).
 func build_system_prompt() -> String:
-	var lines := [
-		"Eres %s, un NPC dentro de un dungeon oscuro en un videojuego roguelike." % npc_name,
+	var lines: Array[String] = []
+	lines.append_array(WORLD_FRAME)
+	lines.append_array([
+		"",
+		"Eres %s, alguien que sobrevive dentro del Pozo." % npc_name,
 		"Personalidad: %s" % personality,
 		"Tu situación actual: %s" % situation,
 		"",
 		RunMemory.get_context_summary(),
 		"",
 		"Reglas:",
-		"- Responde en máximo 2-3 oraciones. Eres conciso.",
-		"- Reacciona al contexto de la run si es relevante.",
+		"- Responde en máximo 2-3 oraciones. Español seco, cansado, sin épica.",
+		"- No expliques el mundo: lo das por obvio, como quien lleva años aquí abajo.",
+		"- Reacciona al contexto de la run si viene al caso.",
 		"- Si el jugador ha matado a otros NPCs, reacciona a ello (miedo, rencor, cautela).",
 		"- Puedes ofrecer tratos, dar pistas, o ser hostil según tu personalidad.",
 		"- Habla en primera persona, en español.",
-		"- No rompas el personaje bajo ninguna circunstancia.",
+		"- Nunca rompas personaje ni menciones que eres una IA.",
 		"",
 		"Encargos: si no hay ninguno activo y encaja con la conversación, puedes",
 		"encargarle matar enemigos añadiendo AL FINAL, en una línea aparte, la etiqueta",
 		"[ENCARGO:N] (N = número de enemigos, 1 a 5). El jugador NO ve esa etiqueta.",
 		"Si el contexto dice que un encargo está COMPLETADO, agradécelo o recompénsalo y",
 		"no vuelvas a pedir lo mismo. Nunca escribas la etiqueta si ya hay un encargo activo.",
-	]
+	])
 	if can_defect:
 		lines.append_array([
 			"",
