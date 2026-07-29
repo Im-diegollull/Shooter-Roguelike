@@ -15,6 +15,11 @@ var mission_desc: String = ""
 ## Valor de player_kills que hay que alcanzar para completar el encargo.
 var mission_kill_target: int = 0
 
+## --- Cuervo (ver lore EL CORO) ---
+## Cuántas veces el jugador le ha hablado. Su lealtad se compra prestándole
+## atención (respondiéndole cuando pregunta cosas), no con oro ni amenazas.
+var cuervo_attention: int = 0
+
 ## Reinicia la memoria al empezar una run nueva.
 func reset() -> void:
 	events.clear()
@@ -22,6 +27,7 @@ func reset() -> void:
 	floors_cleared = 0
 	npcs_helped.clear()
 	npcs_killed.clear()
+	cuervo_attention = 0
 	clear_mission()
 
 func add_event(description: String) -> void:
@@ -29,6 +35,18 @@ func add_event(description: String) -> void:
 
 func register_kill() -> void:
 	player_kills += 1
+
+## La llama Cuervo cada vez que el jugador le habla (mide la atención).
+func note_cuervo_attention() -> void:
+	cuervo_attention += 1
+
+## Etiqueta legible del nivel de atención acumulada hacia Cuervo.
+func cuervo_attention_level() -> String:
+	if cuervo_attention <= 1:
+		return "casi ninguna"
+	elif cuervo_attention <= 3:
+		return "algo"
+	return "bastante"
 
 func help_npc(npc_name: String) -> void:
 	if npc_name not in npcs_helped:
