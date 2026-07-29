@@ -16,6 +16,9 @@ const DIALOG_BOX_SCENE: PackedScene = preload("res://scenes/ui/DialogBox.tscn")
 @export var max_health: int = 6
 ## Si es true, la IA puede decidir unirse ([UNIRSE]) o traicionar ([TRAICION]).
 @export var can_defect: bool = false
+## Si es true (Cuervo), su lealtad se compra con atención — cuenta cuántas veces
+## le habla el jugador y su decisión depende de eso, no de oro ni amenazas.
+@export var loyalty_by_attention: bool = false
 
 @onready var _prompt: Label = $Prompt
 @onready var _zone: Area2D = $InteractionZone
@@ -114,6 +117,9 @@ func _become_enemy() -> void:
 	queue_free()
 
 func _on_player_sent(message: String) -> void:
+	# Hablarle a Cuervo ES prestarle atención: sube su lealtad (ver lore).
+	if loyalty_by_attention:
+		RunMemory.note_cuervo_attention()
 	_dialog.show_thinking()
 	var response := await _generate_response(message)
 	if _dialog != null:
@@ -225,7 +231,18 @@ func build_system_prompt() -> String:
 		"Si el contexto dice que un encargo está COMPLETADO, agradécelo o recompénsalo y",
 		"no vuelvas a pedir lo mismo. Nunca escribas la etiqueta si ya hay un encargo activo.",
 	])
-	if can_defect:
+	if can_defect and loyalty_by_attention:
+		lines.append_array([
+			"",
+			"Tu lealtad NO se compra con oro ni se doblega con amenazas: se gana con que",
+			"el jugador te escuche. Pregúntale cosas personales (de dónde viene, por quién baja,",
+			"si dejó a alguien arriba). Que el jugador te haya prestado %s atención hasta ahora." % RunMemory.cuervo_attention_level(),
+			"Cuando de verdad lo decidas, márcalo AL FINAL en una línea aparte (el jugador no la ve):",
+			"- Si te ha escuchado y respondido, te fías y te unes: etiqueta [UNIRSE].",
+			"- Si te ignora, te apura o solo le importa el botín, no te fías: etiqueta [TRAICION].",
+			"- Usa una etiqueta SOLO cuando de verdad decidas; no antes. No vuelvas a cambiarla.",
+		])
+	elif can_defect:
 		lines.append_array([
 			"",
 			"Decisión de desertor: según cómo te trate el jugador, puedes tomar UNA",
