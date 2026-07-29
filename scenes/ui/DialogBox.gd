@@ -11,6 +11,7 @@ signal player_sent(message: String)
 const COLOR_ACCENT := Color("5cd6c0")
 const COLOR_NPC := Color("ffd166")
 const COLOR_PLAYER := Color("8ecae6")
+const COLOR_CORO := Color("7fe0d4")
 const COLOR_PANEL_BG := Color(0.05, 0.06, 0.09, 0.97)
 const COLOR_DIM := Color(0.02, 0.02, 0.04, 0.55)
 
@@ -41,9 +42,18 @@ func open(npc_name: String, greeting: String) -> void:
 func add_player_line(text: String) -> void:
 	_append("Tú:", COLOR_PLAYER, text)
 
-func add_npc_line(text: String) -> void:
+## `reactivate=false` deja el input bloqueado (p.ej. si CORO va a pisar la línea).
+func add_npc_line(text: String, reactivate: bool = true) -> void:
 	_append("%s:" % _npc_name, COLOR_NPC, text)
-	# Al llegar respuesta se reactiva el input.
+	if reactivate:
+		_reactivate()
+
+## CORO pisa el diálogo con un aviso de sistema (interrupción, ver DialogueBus).
+func add_coro_line(text: String) -> void:
+	_append("CORO:", COLOR_CORO, text)
+	_reactivate()
+
+func _reactivate() -> void:
 	_thinking = false
 	_status.text = HINT
 	_input.editable = true
