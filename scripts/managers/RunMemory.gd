@@ -23,6 +23,12 @@ var mission_kill_target: int = 0
 ## atención (respondiéndole cuando pregunta cosas), no con oro ni amenazas.
 var cuervo_attention: int = 0
 
+## --- Interrupciones de diálogo (foreshadowing, ver lore EL CORO §6) ---
+## Cada vez que una interrupción corta una línea a media palabra, el remanente
+## oculto se guarda aquí. Lo que nunca se retoma es lo que duele.
+## Cada entrada: {"speaker": String, "hidden": String}.
+var interrupted_lines: Array[Dictionary] = []
+
 ## Reinicia la memoria al empezar una run nueva.
 func reset() -> void:
 	events.clear()
@@ -31,6 +37,7 @@ func reset() -> void:
 	npcs_helped.clear()
 	npcs_killed.clear()
 	cuervo_attention = 0
+	interrupted_lines.clear()
 	clear_mission()
 
 func add_event(description: String) -> void:
@@ -43,6 +50,22 @@ func register_kill() -> void:
 ## La llama Cuervo cada vez que el jugador le habla (mide la atención).
 func note_cuervo_attention() -> void:
 	cuervo_attention += 1
+
+## Guarda el remanente oculto de una línea cortada por una interrupción.
+func record_interruption(speaker: String, hidden: String) -> void:
+	if hidden.strip_edges().is_empty():
+		return
+	interrupted_lines.append({"speaker": speaker, "hidden": hidden})
+
+## Devuelve (y consume) el último remanente oculto de un speaker, o "" si no hay.
+## Para que un NPC pueda retomar ("te estaba diciendo que…") — o nunca.
+func take_interruption_for(speaker: String) -> String:
+	for i in range(interrupted_lines.size() - 1, -1, -1):
+		if interrupted_lines[i]["speaker"] == speaker:
+			var hidden: String = interrupted_lines[i]["hidden"]
+			interrupted_lines.remove_at(i)
+			return hidden
+	return ""
 
 ## Etiqueta legible del nivel de atención acumulada hacia Cuervo.
 func cuervo_attention_level() -> String:
