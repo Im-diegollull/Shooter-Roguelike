@@ -76,6 +76,7 @@ func take_damage(amount: int) -> void:
 		return
 	current_health = maxi(current_health - amount, 0)
 	health_changed.emit(current_health, max_health)
+	Coro.on_player_hit(current_health, max_health)
 	_invuln = invuln_time
 	if current_health <= 0:
 		_die()
