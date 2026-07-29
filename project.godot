@@ -20,6 +20,7 @@ config/icon="res://icon.svg"
 ClaudeClient="*res://scripts/ai/ClaudeClient.gd"
 RunMemory="*res://scripts/managers/RunMemory.gd"
 Coro="*res://scripts/managers/Coro.gd"
+DialogueBus="*res://scripts/managers/DialogueBus.gd"
 
 [display]
 
