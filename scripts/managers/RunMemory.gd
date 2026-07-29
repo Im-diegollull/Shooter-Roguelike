@@ -3,6 +3,9 @@ extends Node
 ## Memoria de la run actual (autoload "RunMemory").
 ## Acumula lo que hace el jugador para dárselo como contexto a los NPCs.
 
+## La emite register_kill(); CORO y otros sistemas reaccionan sin acoplarse.
+signal kill_registered(total: int)
+
 var events: Array[String] = []
 var player_kills: int = 0
 var floors_cleared: int = 0
@@ -35,6 +38,7 @@ func add_event(description: String) -> void:
 
 func register_kill() -> void:
 	player_kills += 1
+	kill_registered.emit(player_kills)
 
 ## La llama Cuervo cada vez que el jugador le habla (mide la atención).
 func note_cuervo_attention() -> void:
