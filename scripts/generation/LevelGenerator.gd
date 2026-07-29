@@ -56,6 +56,8 @@ func _ready() -> void:
 	_place_player()
 	_spawn_npcs()
 	_spawn_enemies()
+	# CORO da la bienvenida al piso (espera a que el jugador exista en escena).
+	Coro.announce_floor()
 
 # --- Generación ---
 
