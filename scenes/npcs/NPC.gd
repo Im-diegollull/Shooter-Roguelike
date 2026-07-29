@@ -122,7 +122,14 @@ func _on_player_sent(message: String) -> void:
 		RunMemory.note_cuervo_attention()
 	_dialog.show_thinking()
 	var response := await _generate_response(message)
-	if _dialog != null:
+	if _dialog == null:
+		return
+	# CORO puede pisar la respuesta a media palabra (ver DialogueBus / lore §6).
+	var it: Dictionary = DialogueBus.maybe_coro_interrupt(npc_name, response)
+	if it.get("cut", false):
+		_dialog.add_npc_line(it["shown"], false)
+		_dialog.add_coro_line(it["coro"])
+	else:
 		_dialog.add_npc_line(response)
 
 ## Envía el mensaje a Claude con el historial de la conversación y espera la
