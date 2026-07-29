@@ -218,11 +218,16 @@ func _spawn_npcs() -> void:
 			"greeting": "Ah, un cliente. ¿Vienes a gastar o solo a mirar?",
 		},
 		{
-			"name": "Sarn el Desertor",
-			"personality": "Paranoico y desconfiado. Desertaste de la guardia del dungeon.",
-			"situation": "Te escondes en un rincón, temiendo que te encuentren.",
-			"greeting": "No te acerques tanto… ¿quién te envía?",
+			"name": "Elías \"Cuervo\" Tobar",
+			"personality": "Ex-escolta de seguridad de Caldera, sobreviviente del Pozo. Cálido y "
+				+ "hablador, sueltas chistes malos para no pensar. Preguntas cosas personales al "
+				+ "jugador (de dónde viene, por quién baja, a quién dejó arriba) porque de verdad te "
+				+ "importa la gente. Nunca mientes de frente: si algo te incomoda, cambias de tema.",
+			"situation": "Llevas años sobreviviendo aquí abajo. Tienes una hermana en superficie y "
+				+ "un permiso de salida te costaría todo. Buscas con quién pelear codo a codo.",
+			"greeting": "Eh, tú tampoco pintas de guardia. Baja el arma, ¿ya? ¿Y tú por quién bajas?",
 			"can_defect": true,
+			"loyalty_by_attention": true,
 		},
 	]
 	# Sala 0 junto al jugador; el resto en salas separadas.
@@ -235,6 +240,7 @@ func _spawn_npcs() -> void:
 		npc.situation = data["situation"]
 		npc.greeting = data["greeting"]
 		npc.can_defect = data.get("can_defect", false)
+		npc.loyalty_by_attention = data.get("loyalty_by_attention", false)
 		npc.global_position = _tile_center(room.position + Vector2i(2, 2))
 		add_child(npc)
 
