@@ -16,7 +16,8 @@ extends Node
 enum Priority { NPC = 0, COMBAT = 1, SYSTEM = 2 }
 
 ## Probabilidad de que CORO corte una respuesta del NPC (si es lo bastante larga).
-const CORO_INTERRUPT_CHANCE := 0.22
+## Baja a propósito: la interrupción debe ser rara y especial, no un incordio.
+const CORO_INTERRUPT_CHANCE := 0.06
 ## No cortar líneas más cortas que esto: no habría nada que ocultar.
 const MIN_LINE_TO_CUT := 45
 
