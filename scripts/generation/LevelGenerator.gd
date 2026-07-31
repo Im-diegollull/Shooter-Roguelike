@@ -8,6 +8,7 @@ extends Node2D
 const CHASER_SCENE: PackedScene = preload("res://scenes/enemies/Enemy.tscn")
 const RANGED_SCENE: PackedScene = preload("res://scenes/enemies/RangedEnemy.tscn")
 const NPC_SCENE: PackedScene = preload("res://scenes/npcs/NPC.tscn")
+const EXIT_SCRIPT: GDScript = preload("res://scenes/world/Exit.gd")
 
 ## Layer 5 (valor 16) reservada para el entorno/muros.
 const WALLS_LAYER: int = 16
@@ -31,6 +32,10 @@ var rooms: Array[Rect2i] = []
 var _rng := RandomNumberGenerator.new()
 var _floor: PackedByteArray
 var _enemies_root: Node2D
+## Nodo que agrupa todo el contenido del piso (muros, NPCs, enemigos, salida).
+## Se libera y se reconstruye entero al bajar de piso.
+var _content: Node2D
+var _descending: bool = false
 
 # --- Hoja del árbol BSP ---
 class Leaf:
@@ -50,14 +55,41 @@ class Leaf:
 
 func _ready() -> void:
 	_rng.randomize()
+	build_floor()
+
+## Construye (o reconstruye) el piso completo desde cero.
+func build_floor() -> void:
+	if _content != null:
+		# Seguro: build_floor solo corre desde _ready o desde descend (diferido),
+		# nunca durante el procesado de física, así que free() inmediato es válido
+		# y deja el nombre "Floor" limpio para el piso nuevo.
+		_content.free()
+	_content = Node2D.new()
+	_content.name = "Floor"
+	add_child(_content)
+
 	generate()
 	_build_walls()
-	_draw_ready()
 	_place_player()
+	_reposition_allies()
 	_spawn_npcs()
 	_spawn_enemies()
+	_place_exit()
+	_draw_ready()
 	# CORO da la bienvenida al piso (espera a que el jugador exista en escena).
 	Coro.announce_floor()
+	_descending = false
+
+## Baja al siguiente piso: suma el progreso y regenera todo (el jugador persiste).
+func descend() -> void:
+	if _descending:
+		return
+	_descending = true
+	RunMemory.floors_cleared += 1
+	RunMemory.add_event("Bajaste al piso %d del Pozo" % (RunMemory.floors_cleared + 1))
+	# Diferido: `descend` viene de un callback de física (body_entered) y no se
+	# pueden liberar/crear cuerpos con colisión mientras se procesa la física.
+	build_floor.call_deferred()
 
 # --- Generación ---
 
@@ -177,7 +209,7 @@ func _build_walls() -> void:
 	body.name = "Walls"
 	body.collision_layer = WALLS_LAYER
 	body.collision_mask = 0
-	add_child(body)
+	_content.add_child(body)
 
 	# Un tile es muro si es roca y toca suelo por algún lado (contorno cerrado).
 	for y in grid_height:
@@ -208,6 +240,16 @@ func _place_player() -> void:
 		return
 	player.global_position = _tile_center(rooms[0].position + rooms[0].size / 2)
 
+## Al bajar de piso, trae a los aliados junto al jugador (evita que queden
+## atrapados en coordenadas del piso anterior, tras un muro).
+func _reposition_allies() -> void:
+	var player: Node2D = get_tree().get_first_node_in_group("player")
+	if player == null:
+		return
+	for ally in get_tree().get_nodes_in_group("ally"):
+		if ally is Node2D:
+			ally.global_position = player.global_position
+
 func _spawn_npcs() -> void:
 	if rooms.is_empty():
 		return
@@ -230,6 +272,7 @@ func _spawn_npcs() -> void:
 			"greeting": "Eh, tú tampoco pintas de guardia. Baja el arma, ¿ya? ¿Y tú por quién bajas?",
 			"can_defect": true,
 			"loyalty_by_attention": true,
+			"interruptible_by_coro": false,
 		},
 	]
 	# Sala 0 junto al jugador; el resto en salas separadas.
@@ -243,13 +286,14 @@ func _spawn_npcs() -> void:
 		npc.greeting = data["greeting"]
 		npc.can_defect = data.get("can_defect", false)
 		npc.loyalty_by_attention = data.get("loyalty_by_attention", false)
+		npc.interruptible_by_coro = data.get("interruptible_by_coro", true)
 		npc.global_position = _tile_center(room.position + Vector2i(2, 2))
-		add_child(npc)
+		_content.add_child(npc)
 
 func _spawn_enemies() -> void:
 	_enemies_root = Node2D.new()
 	_enemies_root.name = "Enemies"
-	add_child(_enemies_root)
+	_content.add_child(_enemies_root)
 
 	# La sala 0 es el spawn del jugador: se deja despejada.
 	for i in range(1, rooms.size()):
@@ -262,6 +306,24 @@ func _spawn_enemies() -> void:
 			var ty := _rng.randi_range(room.position.y + 1, room.position.y + room.size.y - 2)
 			enemy.global_position = _tile_center(Vector2i(tx, ty))
 			_enemies_root.add_child(enemy)
+
+## Coloca el portal de descenso en la sala más lejana a la de inicio (sala 0).
+func _place_exit() -> void:
+	if rooms.size() < 2:
+		return
+	var start := Vector2(rooms[0].position + rooms[0].size / 2)
+	var best_room := 1
+	var best_dist := -1.0
+	for i in range(1, rooms.size()):
+		var c := Vector2(rooms[i].position + rooms[i].size / 2)
+		var d := start.distance_squared_to(c)
+		if d > best_dist:
+			best_dist = d
+			best_room = i
+	var exit: Area2D = EXIT_SCRIPT.new()
+	exit.global_position = _tile_center(rooms[best_room].position + rooms[best_room].size / 2)
+	exit.reached.connect(descend)
+	_content.add_child(exit)
 
 func _tile_center(tile: Vector2i) -> Vector2:
 	return Vector2((tile.x + 0.5) * tile_size, (tile.y + 0.5) * tile_size)
