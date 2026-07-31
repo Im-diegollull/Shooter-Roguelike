@@ -19,6 +19,9 @@ const DIALOG_BOX_SCENE: PackedScene = preload("res://scenes/ui/DialogBox.tscn")
 ## Si es true (Cuervo), su lealtad se compra con atención — cuenta cuántas veces
 ## le habla el jugador y su decisión depende de eso, no de oro ni amenazas.
 @export var loyalty_by_attention: bool = false
+## Si es false, CORO nunca pisa sus líneas (p.ej. Cuervo: su charla es demasiado
+## importante para cortarla). Ver DialogueBus.
+@export var interruptible_by_coro: bool = true
 
 @onready var _prompt: Label = $Prompt
 @onready var _zone: Area2D = $InteractionZone
@@ -106,7 +109,9 @@ func _become_ally() -> void:
 	RunMemory.add_event("%s se unió a ti" % npc_name)
 	var ally := preload("res://scenes/allies/Ally.tscn").instantiate()
 	ally.global_position = global_position
-	get_parent().add_child(ally)
+	# Cuelga del Main, no del piso: así el aliado sobrevive al bajar de piso
+	# (el nodo Floor se libera y se reconstruye en cada descenso).
+	get_tree().current_scene.add_child(ally)
 	queue_free()
 
 func _become_enemy() -> void:
@@ -124,8 +129,11 @@ func _on_player_sent(message: String) -> void:
 	var response := await _generate_response(message)
 	if _dialog == null:
 		return
-	# CORO puede pisar la respuesta a media palabra (ver DialogueBus / lore §6).
-	var it: Dictionary = DialogueBus.maybe_coro_interrupt(npc_name, response)
+	# CORO puede pisar la respuesta a media palabra (ver DialogueBus / lore §6),
+	# salvo NPCs marcados como no interrumpibles (Cuervo).
+	var it: Dictionary = {}
+	if interruptible_by_coro:
+		it = DialogueBus.maybe_coro_interrupt(npc_name, response)
 	if it.get("cut", false):
 		_dialog.add_npc_line(it["shown"], false)
 		_dialog.add_coro_line(it["coro"])
