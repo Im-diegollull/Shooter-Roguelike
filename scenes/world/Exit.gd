@@ -13,6 +13,7 @@ const COLOR_GLOW := Color(0.36, 0.84, 0.75, 0.14)
 var _used: bool = false
 
 func _ready() -> void:
+	add_to_group("exit")  # para que CORO pueda guiar al jugador hacia él
 	collision_layer = 0
 	collision_mask = 1  # capa del jugador
 	monitoring = true

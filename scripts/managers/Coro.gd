@@ -18,6 +18,24 @@ const IDLE_MAX := 28.0
 ## Probabilidad de que CORO comente una baja (no habla en cada muerte).
 const KILL_COMMENT_CHANCE := 0.28
 
+# --- Función jugable: radar de amenazas + guía a la salida ---
+
+## Cada cuánto (segundos) CORO revisa el entorno del jugador. No hace falta cada
+## frame: con esto basta para avisar a tiempo sin coste.
+const SCAN_INTERVAL := 0.3
+## Un enemigo dentro de este radio del jugador se considera una amenaza cercana.
+const THREAT_RADIUS := 340.0
+## Solo se "olvida" un enemigo (y podrá volver a avisar) al salir de este radio
+## mayor: evita que un enemigo que oscila en el borde avise una y otra vez.
+const THREAT_FORGET_RADIUS := 520.0
+## Mínimo entre dos avisos de amenaza seguidos (no spamear en un enjambre).
+const THREAT_GAP := 2.6
+## Semiángulo (radianes) del cono de puntería del jugador. Solo se avisa de
+## enemigos FUERA de ese cono: los que ya estás mirando no necesitan aviso.
+const FRONT_HALF_ANGLE := 1.0  # ~57°
+## Más allá de este ángulo respecto a tu puntería, el enemigo está "a tu espalda".
+const BEHIND_ANGLE := 2.35  # ~135°
+
 # --- Repertorio (tono manual de seguridad; algunas líneas siembran el lore) ---
 
 const LINES_WELCOME: Array[String] = [
@@ -47,6 +65,21 @@ const LINES_AMBIENT: Array[String] = [
 	"Caldera le desea una jornada productiva.",
 ]
 
+## Aviso de amenaza. %s se sustituye por la dirección ("a tu izquierda", etc.).
+const LINES_THREAT: Array[String] = [
+	"Cuidado, %s.",
+	"Contacto %s. Muévase.",
+	"Amenaza %s, operario.",
+	"Atención: hostil %s.",
+]
+
+## Guía al portal de descenso cuando el sector queda limpio. %s = dirección.
+const LINES_EXIT: Array[String] = [
+	"Sector despejado. El descenso está %s.",
+	"Ruta libre. La bajada queda %s. Buen trabajo.",
+	"Sin hostiles. Portal de descenso %s.",
+]
+
 var _layer: CanvasLayer
 var _panel: PanelContainer
 var _label: Label
@@ -56,6 +89,17 @@ var _last_line: String = ""
 var _idle_time: float = 0.0
 var _idle_next: float = 0.0
 var _rng := RandomNumberGenerator.new()
+var _tween: Tween = null
+
+# Estado del radar / guía.
+var _scan_time: float = 0.0
+var _threat_gap: float = 0.0
+## Enemigos ya avisados (instance_id → true) hasta que se alejen o mueran.
+var _warned: Dictionary = {}
+## Si en este piso llegó a haber enemigos (para no "despejar" un piso vacío).
+var _saw_enemies: bool = false
+## Si ya se guio al portal en este piso (una sola vez por piso).
+var _exit_announced: bool = false
 
 func _ready() -> void:
 	_rng.randomize()
@@ -64,21 +108,103 @@ func _ready() -> void:
 	RunMemory.kill_registered.connect(_on_kill)
 
 func _process(delta: float) -> void:
-	# Líneas ambientales: solo si hay jugador en escena y no hay nada mostrándose.
-	if _showing or not _queue.is_empty():
+	var player: Node2D = get_tree().get_first_node_in_group("player")
+	if player == null:
 		return
-	if get_tree().get_first_node_in_group("player") == null:
+
+	# Radar de amenazas + guía a la salida (función jugable): en tiempo real,
+	# pero sin escanear cada frame.
+	_threat_gap = maxf(_threat_gap - delta, 0.0)
+	_scan_time += delta
+	if _scan_time >= SCAN_INTERVAL:
+		_scan_time = 0.0
+		_scan_threats(player)
+		_check_sector_clear(player)
+
+	# Líneas ambientales: solo si no hay nada mostrándose ni en cola.
+	if _showing or not _queue.is_empty():
 		return
 	_idle_time += delta
 	if _idle_time >= _idle_next:
 		say(_pick(LINES_AMBIENT))
 		_reset_idle()
 
+# --- Radar de amenazas ---
+
+## Busca enemigos cercanos FUERA del cono de puntería del jugador y avisa de su
+## dirección. Cada enemigo avisa una sola vez hasta que se aleja o muere.
+func _scan_threats(player: Node2D) -> void:
+	var aim := Vector2.from_angle(player.global_rotation)  # look_at apunta el +x
+	var nearest: Node2D = null
+	var nearest_d := THREAT_RADIUS
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not (e is Node2D):
+			continue
+		_saw_enemies = true
+		var to_e: Vector2 = e.global_position - player.global_position
+		var d := to_e.length()
+		var id := e.get_instance_id()
+		# Olvida a los que se alejan lo bastante: podrán volver a avisar.
+		if d > THREAT_FORGET_RADIUS:
+			_warned.erase(id)
+			continue
+		if d > THREAT_RADIUS or _warned.has(id):
+			continue
+		# Solo lo que NO estás mirando (fuera de tu cono de puntería).
+		if absf(aim.angle_to(to_e)) < FRONT_HALF_ANGLE:
+			continue
+		if d < nearest_d:
+			nearest_d = d
+			nearest = e
+	if nearest != null and _threat_gap <= 0.0:
+		var to_e: Vector2 = nearest.global_position - player.global_position
+		_warned[nearest.get_instance_id()] = true
+		_threat_gap = THREAT_GAP
+		_alert(_pick(LINES_THREAT) % _threat_direction(aim, to_e))
+	# Limpia ids de enemigos ya muertos para que el diccionario no crezca.
+	_prune_warned()
+
+## Guía al portal cuando el sector queda sin enemigos (una vez por piso).
+func _check_sector_clear(player: Node2D) -> void:
+	if _exit_announced or not _saw_enemies:
+		return
+	if not get_tree().get_nodes_in_group("enemy").is_empty():
+		return
+	_exit_announced = true
+	var exit: Node2D = get_tree().get_first_node_in_group("exit")
+	if exit == null:
+		return
+	var dir := _cardinal(exit.global_position - player.global_position)
+	_alert(_pick(LINES_EXIT) % dir)
+
+func _prune_warned() -> void:
+	for id in _warned.keys():
+		if not is_instance_id_valid(id):
+			_warned.erase(id)
+
+## Dirección de la amenaza relativa a hacia dónde apunta el jugador: si está muy
+## por detrás, "a tu espalda"; si no, el punto cardinal en pantalla.
+func _threat_direction(aim: Vector2, to_enemy: Vector2) -> String:
+	if absf(aim.angle_to(to_enemy)) >= BEHIND_ANGLE:
+		return "a tu espalda"
+	return _cardinal(to_enemy)
+
+## Punto cardinal en pantalla (arriba = -y) del vector dado.
+func _cardinal(v: Vector2) -> String:
+	if absf(v.x) >= absf(v.y):
+		return "a tu derecha" if v.x >= 0.0 else "a tu izquierda"
+	return "abajo" if v.y >= 0.0 else "arriba"
+
 # --- API pública (la llaman el generador, el player, etc.) ---
 
 ## Llamar al entrar a un piso nuevo.
 func announce_floor() -> void:
 	_queue.clear()  # una llegada nueva pisa avisos viejos
+	# Reinicia el radar/guía para el piso nuevo.
+	_warned.clear()
+	_saw_enemies = false
+	_exit_announced = false
+	_threat_gap = 0.0
 	say(_pick(LINES_WELCOME))
 	_reset_idle()
 
@@ -97,6 +223,19 @@ func say(text: String) -> void:
 	_queue.append(text)
 	if not _showing:
 		_play_next()
+
+## Aviso urgente (amenaza / salida): pisa lo que se esté mostrando y sale ya.
+## No debe esperar en la cola: para eso sirve como función jugable.
+func _alert(text: String) -> void:
+	if text.is_empty():
+		return
+	if _tween != null and _tween.is_valid():
+		_tween.kill()
+	_queue.clear()
+	_queue.append(text)
+	_showing = false
+	_reset_idle()
+	_play_next()
 
 # --- Interno ---
 
@@ -129,11 +268,11 @@ func _play_next() -> void:
 	_label.text = _queue.pop_front()
 	_panel.modulate.a = 0.0
 	_panel.visible = true
-	var tw := create_tween()
-	tw.tween_property(_panel, "modulate:a", 1.0, FADE)
-	tw.tween_interval(SHOW_TIME)
-	tw.tween_property(_panel, "modulate:a", 0.0, FADE)
-	tw.tween_callback(_play_next)
+	_tween = create_tween()
+	_tween.tween_property(_panel, "modulate:a", 1.0, FADE)
+	_tween.tween_interval(SHOW_TIME)
+	_tween.tween_property(_panel, "modulate:a", 0.0, FADE)
+	_tween.tween_callback(_play_next)
 
 # --- UI (banda superior, construida en código como el HUD y el DialogBox) ---
 
