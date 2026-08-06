@@ -12,6 +12,8 @@ signal died
 @export var fire_rate: float = 6.0
 ## Vida máxima (nº de segmentos del HUD).
 @export var max_health: int = 5
+## Daño que hace cada bala del jugador (lo suben las mejoras entre pisos).
+@export var bullet_damage: int = 1
 ## Segundos de invulnerabilidad tras recibir un golpe.
 @export var invuln_time: float = 0.8
 ## Cuántos píxeles se adelanta la cámara hacia el ratón (feel twin-stick).
@@ -86,8 +88,27 @@ func _shoot() -> void:
 	bullet.global_position = muzzle.global_position
 	bullet.direction = (get_global_mouse_position() - global_position).normalized()
 	bullet.rotation = bullet.direction.angle()
+	bullet.damage = bullet_damage
 	# Se añade al mundo (padre del player) para que no se mueva con el jugador.
 	get_parent().add_child(bullet)
+
+## Aplica una mejora elegida entre pisos (ver UpgradeScreen). Encapsula aquí el
+## efecto de cada stat para que la UI no toque los internos del jugador.
+func apply_upgrade(id: String) -> void:
+	match id:
+		"fire_rate":
+			fire_rate *= 1.2
+		"damage":
+			bullet_damage += 1
+		"max_health":
+			max_health += 1
+			current_health += 1
+			health_changed.emit(current_health, max_health)
+		"move_speed":
+			move_speed *= 1.12
+		"heal":
+			current_health = mini(current_health + 2, max_health)
+			health_changed.emit(current_health, max_health)
 
 func _die() -> void:
 	_dead = true

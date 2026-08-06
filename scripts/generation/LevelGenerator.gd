@@ -9,6 +9,7 @@ const CHASER_SCENE: PackedScene = preload("res://scenes/enemies/Enemy.tscn")
 const RANGED_SCENE: PackedScene = preload("res://scenes/enemies/RangedEnemy.tscn")
 const NPC_SCENE: PackedScene = preload("res://scenes/npcs/NPC.tscn")
 const EXIT_SCRIPT: GDScript = preload("res://scenes/world/Exit.gd")
+const UPGRADE_SCREEN: GDScript = preload("res://scenes/ui/UpgradeScreen.gd")
 
 ## Layer 5 (valor 16) reservada para el entorno/muros.
 const WALLS_LAYER: int = 16
@@ -92,7 +93,8 @@ func build_floor() -> void:
 	Coro.announce_floor()
 	_descending = false
 
-## Baja al siguiente piso: suma el progreso y regenera todo (el jugador persiste).
+## Baja al siguiente piso: suma el progreso, ofrece una mejora y regenera todo
+## (el jugador persiste). La reconstrucción espera a que el jugador elija.
 func descend() -> void:
 	if _descending:
 		return
@@ -100,7 +102,23 @@ func descend() -> void:
 	RunMemory.floors_cleared += 1
 	RunMemory.add_event("Bajaste al piso %d del Pozo" % (RunMemory.floors_cleared + 1))
 	# Diferido: `descend` viene de un callback de física (body_entered) y no se
-	# pueden liberar/crear cuerpos con colisión mientras se procesa la física.
+	# pueden liberar/crear cuerpos ni tocar el árbol mientras se procesa la física.
+	_offer_upgrade.call_deferred()
+
+## Pausa el juego y muestra la pantalla de mejora. Al elegir, aplica y construye
+## el piso nuevo.
+func _offer_upgrade() -> void:
+	var screen: UpgradeScreen = UPGRADE_SCREEN.new()
+	get_tree().current_scene.add_child(screen)
+	screen.chosen.connect(_on_upgrade_chosen)
+	get_tree().paused = true
+	screen.open(RunMemory.floors_cleared + 1)
+
+func _on_upgrade_chosen(upgrade_id: String) -> void:
+	var player: Node = get_tree().get_first_node_in_group("player")
+	if player != null and player.has_method("apply_upgrade"):
+		player.apply_upgrade(upgrade_id)
+	get_tree().paused = false
 	build_floor.call_deferred()
 
 # --- Generación ---
