@@ -10,6 +10,7 @@ const RANGED_SCENE: PackedScene = preload("res://scenes/enemies/RangedEnemy.tscn
 const NPC_SCENE: PackedScene = preload("res://scenes/npcs/NPC.tscn")
 const EXIT_SCRIPT: GDScript = preload("res://scenes/world/Exit.gd")
 const UPGRADE_SCREEN: GDScript = preload("res://scenes/ui/UpgradeScreen.gd")
+const ENDING_SCREEN: GDScript = preload("res://scenes/ui/EndingScreen.gd")
 
 ## Layer 5 (valor 16) reservada para el entorno/muros.
 const WALLS_LAYER: int = 16
@@ -27,6 +28,9 @@ const WALLS_LAYER: int = 16
 ## Rango de enemigos por sala en el piso 1 (la sala de inicio nunca tiene).
 @export var enemies_per_room_min: int = 1
 @export var enemies_per_room_max: int = 3
+## Piso final: al completarlo y tocar el portal, llega el final (condición de
+## victoria). El lore completo son 10 pisos (Acto V, el Núcleo); ajustable aquí.
+@export var final_floor: int = 8
 
 # --- Escalado de dificultad por profundidad (RunMemory.floors_cleared) ---
 ## Cada cuántos pisos se suma +1 al rango de enemigos por sala.
@@ -68,6 +72,10 @@ class Leaf:
 
 func _ready() -> void:
 	_rng.randomize()
+	# _ready corre una vez por carga de escena = inicio de una run nueva (menú o
+	# reinicio tras morir). El descenso usa build_floor, no _ready, así que la
+	# memoria persiste entre pisos pero se limpia al empezar una run desde cero.
+	RunMemory.reset()
 	build_floor()
 
 ## Construye (o reconstruye) el piso completo desde cero.
@@ -99,11 +107,23 @@ func descend() -> void:
 	if _descending:
 		return
 	_descending = true
+	# Si este es el portal del piso final, la run termina (condición de victoria).
+	if RunMemory.floors_cleared + 1 >= final_floor:
+		_reach_ending.call_deferred()
+		return
 	RunMemory.floors_cleared += 1
 	RunMemory.add_event("Bajaste al piso %d del Pozo" % (RunMemory.floors_cleared + 1))
 	# Diferido: `descend` viene de un callback de física (body_entered) y no se
 	# pueden liberar/crear cuerpos ni tocar el árbol mientras se procesa la física.
 	_offer_upgrade.call_deferred()
+
+## Fin de la run: pausa y muestra los tres finales de EL CORO (ver EndingScreen).
+func _reach_ending() -> void:
+	RunMemory.add_event("Llegaste al Núcleo del Pozo")
+	var screen: EndingScreen = ENDING_SCREEN.new()
+	get_tree().current_scene.add_child(screen)
+	get_tree().paused = true
+	screen.open()
 
 ## Pausa el juego y muestra la pantalla de mejora. Al elegir, aplica y construye
 ## el piso nuevo.
