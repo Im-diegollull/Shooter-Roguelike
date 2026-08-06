@@ -300,35 +300,79 @@ func _reposition_allies() -> void:
 		if ally is Node2D:
 			ally.global_position = player.global_position
 
+# --- Arquetipos de NPC (ver tabla del CLAUDE.md y lore EL CORO §3) ---
+# El comportamiento emergente sale del system prompt de NPC.gd; aquí solo va la
+# personalidad, la situación y el saludo. Solo Cuervo tiene mecánica de deserción.
+const ARCHETYPES: Dictionary = {
+	"mercader": {
+		"name": "Vendrik el Mercader",
+		"personality": "Codicioso pero afable si hueles a oro. Hablas con sorna.",
+		"situation": "Tienes un puesto improvisado entre las sombras del piso.",
+		"greeting": "Ah, un cliente. ¿Vienes a gastar o solo a mirar?",
+	},
+	"cuervo": {
+		"name": "Elías \"Cuervo\" Tobar",
+		"personality": "Ex-escolta de seguridad de Caldera, sobreviviente del Pozo. Cálido y "
+			+ "hablador, sueltas chistes malos para no pensar. Preguntas cosas personales al "
+			+ "jugador (de dónde viene, por quién baja, a quién dejó arriba) porque de verdad te "
+			+ "importa la gente. Nunca mientes de frente: si algo te incomoda, cambias de tema.",
+		"situation": "Llevas años sobreviviendo aquí abajo. Tienes una hermana en superficie y "
+			+ "un permiso de salida te costaría todo. Buscas con quién pelear codo a codo.",
+		"greeting": "Eh, tú tampoco pintas de guardia. Baja el arma, ¿ya? ¿Y tú por quién bajas?",
+		"can_defect": true,
+		"loyalty_by_attention": true,
+		"interruptible_by_coro": false,
+	},
+	"oraculo": {
+		"name": "Sindri, el que Escucha",
+		"personality": "Hablas en acertijos y medias frases; nunca respondes de frente, das "
+			+ "señales. Crees leer el Pozo en cómo zumban las máquinas y parpadean las alarmas. "
+			+ "Tranquilo, un poco ido, como quien lleva demasiado tiempo escuchando paredes.",
+		"situation": "Vives pegado a una consola casi muerta que a veces todavía te muestra "
+			+ "retazos del piso de abajo. Sabes lo que viene, pero no lo dices claro.",
+		"greeting": "Ah. Llegas tres pasillos tarde. Baja la voz: aquí abajo las paredes cuentan.",
+	},
+	"prisionero": {
+		"name": "Tomás, el Encerrado",
+		"personality": "Estás asustado y desconfías, pero necesitas ayuda. Si el jugador te "
+			+ "trata con algo de decencia, sueltas lo que has visto y oído del piso. Si te "
+			+ "amenaza, te cierras. No eres valiente, solo llevas demasiado tiempo aquí.",
+		"situation": "Llevas días en una celda de contención de Caldera que nunca vino a cobrar "
+			+ "a nadie. Por la reja oyes pasar cosas que preferirías no oír.",
+		"greeting": "¿Eres… de Caldera? No. No traes su cara. Por favor, sácame de aquí.",
+	},
+	"jefe": {
+		"name": "Rurik, capataz caído",
+		"personality": "Herido y amargo. Fuiste capataz de seguridad de Caldera y perdiste. Si "
+			+ "el jugador no te remata, sueltas verdades del mundo con rencor, casi a modo de "
+			+ "confesión. Odias a Caldera tanto como a ti mismo por haberle servido.",
+		"situation": "Estás en el suelo, sin órdenes que seguir y sin gente que mandar. Se te "
+			+ "acaba el turno y lo sabes.",
+		"greeting": "Termina de una vez o lárgate. ¿Qué miras, recuperador?",
+	},
+}
+
+## Elige qué NPCs aparecen en el piso actual: el mercader casi siempre, Cuervo solo
+## en el piso 1 (se une ahí, ver lore) y un NPC situacional que rota por variedad.
+func _choose_archetypes_for_floor() -> Array:
+	var floor_num: int = RunMemory.floors_cleared + 1
+	var chosen: Array = [ARCHETYPES["mercader"]]  # primero: va junto al jugador (sala 0)
+	# Cuervo solo en el piso 1, y solo si aún no tienes un aliado (no reaparece si ya se unió).
+	if floor_num == 1 and get_tree().get_nodes_in_group("ally").is_empty():
+		chosen.append(ARCHETYPES["cuervo"])
+	# Un NPC situacional por piso (oráculo / prisionero / jefe caído).
+	var pool := ["oraculo", "prisionero", "jefe"]
+	chosen.append(ARCHETYPES[pool[_rng.randi() % pool.size()]])
+	return chosen
+
 func _spawn_npcs() -> void:
 	if rooms.is_empty():
 		return
-	# Dos arquetipos distintos: así se puede matar a uno y ver reaccionar al otro.
-	var archetypes := [
-		{
-			"name": "Vendrik el Mercader",
-			"personality": "Codicioso pero afable si hueles a oro. Hablas con sorna.",
-			"situation": "Tienes un puesto improvisado entre las sombras del piso.",
-			"greeting": "Ah, un cliente. ¿Vienes a gastar o solo a mirar?",
-		},
-		{
-			"name": "Elías \"Cuervo\" Tobar",
-			"personality": "Ex-escolta de seguridad de Caldera, sobreviviente del Pozo. Cálido y "
-				+ "hablador, sueltas chistes malos para no pensar. Preguntas cosas personales al "
-				+ "jugador (de dónde viene, por quién baja, a quién dejó arriba) porque de verdad te "
-				+ "importa la gente. Nunca mientes de frente: si algo te incomoda, cambias de tema.",
-			"situation": "Llevas años sobreviviendo aquí abajo. Tienes una hermana en superficie y "
-				+ "un permiso de salida te costaría todo. Buscas con quién pelear codo a codo.",
-			"greeting": "Eh, tú tampoco pintas de guardia. Baja el arma, ¿ya? ¿Y tú por quién bajas?",
-			"can_defect": true,
-			"loyalty_by_attention": true,
-			"interruptible_by_coro": false,
-		},
-	]
+	var chosen := _choose_archetypes_for_floor()
 	# Sala 0 junto al jugador; el resto en salas separadas.
-	for i in mini(archetypes.size(), rooms.size()):
+	for i in mini(chosen.size(), rooms.size()):
 		var room := rooms[i]
-		var data: Dictionary = archetypes[i]
+		var data: Dictionary = chosen[i]
 		var npc := NPC_SCENE.instantiate()
 		npc.npc_name = data["name"]
 		npc.personality = data["personality"]
