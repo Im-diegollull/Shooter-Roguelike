@@ -23,9 +23,21 @@ const WALLS_LAYER: int = 16
 @export var room_min: int = 6
 ## Pasillos de 2 tiles de ancho.
 @export var corridor_width: int = 2
-## Rango de enemigos por sala (la sala de inicio nunca tiene).
+## Rango de enemigos por sala en el piso 1 (la sala de inicio nunca tiene).
 @export var enemies_per_room_min: int = 1
 @export var enemies_per_room_max: int = 3
+
+# --- Escalado de dificultad por profundidad (RunMemory.floors_cleared) ---
+## Cada cuántos pisos se suma +1 al rango de enemigos por sala.
+@export var enemies_bonus_every: int = 2
+## Tope de enemigos extra por sala (para no saturar salas pequeñas).
+@export var enemies_bonus_cap: int = 4
+## Proporción de tiradores (vs. perseguidores) en el piso 1 y su crecimiento por piso.
+@export var ranged_chance_base: float = 0.4
+@export var ranged_chance_per_floor: float = 0.05
+@export var ranged_chance_max: float = 0.75
+## Cada cuántos pisos los enemigos ganan +1 de vida.
+@export var enemy_health_bonus_every: int = 3
 
 var rooms: Array[Rect2i] = []
 
@@ -295,13 +307,21 @@ func _spawn_enemies() -> void:
 	_enemies_root.name = "Enemies"
 	_content.add_child(_enemies_root)
 
+	# Cuanto más hondo en el Pozo, más y peores enemigos (floors_cleared = 0 en el piso 1).
+	var depth: int = RunMemory.floors_cleared
+	var extra: int = mini(depth / enemies_bonus_every, enemies_bonus_cap)
+	var ranged_chance: float = minf(ranged_chance_base + depth * ranged_chance_per_floor, ranged_chance_max)
+	var health_bonus: int = depth / enemy_health_bonus_every
+
 	# La sala 0 es el spawn del jugador: se deja despejada.
 	for i in range(1, rooms.size()):
 		var room := rooms[i]
-		var count := _rng.randi_range(enemies_per_room_min, enemies_per_room_max)
+		var count := _rng.randi_range(enemies_per_room_min + extra, enemies_per_room_max + extra)
 		for _n in count:
-			var scene := RANGED_SCENE if _rng.randf() < 0.4 else CHASER_SCENE
-			var enemy: Node2D = scene.instantiate()
+			var scene := RANGED_SCENE if _rng.randf() < ranged_chance else CHASER_SCENE
+			var enemy: Enemy = scene.instantiate()
+			# Se ajusta antes de add_child para que _ready lo tome como vida inicial.
+			enemy.max_health += health_bonus
 			var tx := _rng.randi_range(room.position.x + 1, room.position.x + room.size.x - 2)
 			var ty := _rng.randi_range(room.position.y + 1, room.position.y + room.size.y - 2)
 			enemy.global_position = _tile_center(Vector2i(tx, ty))
